@@ -1,0 +1,8 @@
+---
+description: Using the Shopify API
+globs: 
+---
+
+# Always use the shopify GraphQL API and never the REST API
+
+- This is important for [shopify_client.py](mdc:backend/shopify_client.py)

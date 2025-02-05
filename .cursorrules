@@ -1,0 +1,11 @@
+This repository contain the Shopify remix app for an app that runs locally and creates synthetic data for your Shopify store so that you can test your shopify app against it.
+
+This app has a backend file in python making a fastAPI server that the remix app will call to create the synthetic data. This backend uses an AI Agent class to call an LLM to create the synthetic data by providing the desired output and instructions on what data to create.
+
+The shopify app uses typescript and remix and the most modern Shopify API version should always be used.
+
+In the backend always use simple and modular python code.
+
+Keep code simple and modular and ask questions when unsure.
+
+Always use the Shopify GraphQL API and never use the REST API.
