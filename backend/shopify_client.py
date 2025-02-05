@@ -105,17 +105,115 @@ class ShopifyGraphQLClient:
         } for product in result['products']['edges']]
 
     def create_regular_order(self, order_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Create a regular order using GraphQL."""
-        mutation = '''
-        mutation orderCreate($input: OrderInput!) {
-            orderCreate(input: $input) {
-                order {
+        """Create a regular order using GraphQL via draft order process."""
+        # First create a draft order
+        create_mutation = '''
+        mutation draftOrderCreate($input: DraftOrderInput!) {
+            draftOrderCreate(input: $input) {
+                draftOrder {
                     id
-                    totalPrice
-                    createdAt
-                    customer {
-                        firstName
-                        lastName
+                }
+                userErrors {
+                    field
+                    message
+                }
+            }
+        }
+        '''
+        
+        # Convert the order data to draft order format with all necessary fields
+        draft_input = {
+            "email": order_data.get("email"),
+            "tags": order_data.get("tags", []),
+            "lineItems": order_data.get("lineItems", []),
+            "note": "Created via Synthetic Data Generator",
+            "customAttributes": [{"key": "source", "value": "synthetic_data"}],
+            "useCustomerDefaultAddress": False,
+            "appliedDiscount": None  # No discount by default
+        }
+        
+        result = self.execute_query(create_mutation, variables={"input": draft_input})
+        
+        if not result or 'draftOrderCreate' not in result:
+            raise HTTPException(status_code=500, detail="Failed to create draft order")
+            
+        user_errors = result['draftOrderCreate'].get('userErrors', [])
+        if user_errors:
+            error_messages = '; '.join(error.get('message', 'Unknown error') for error in user_errors)
+            raise HTTPException(status_code=400, detail=f"Failed to create draft order: {error_messages}")
+        
+        draft_order_id = result['draftOrderCreate']['draftOrder']['id']
+        
+        # Complete the draft order with more comprehensive response fields
+        complete_mutation = '''
+        mutation draftOrderComplete($id: ID!) {
+            draftOrderComplete(id: $id) {
+                draftOrder {
+                    order {
+                        id
+                        name
+                        totalPriceSet {
+                            shopMoney {
+                                amount
+                                currencyCode
+                            }
+                        }
+                        subtotalPriceSet {
+                            shopMoney {
+                                amount
+                                currencyCode
+                            }
+                        }
+                        totalTaxSet {
+                            shopMoney {
+                                amount
+                                currencyCode
+                            }
+                        }
+                        createdAt
+                        processedAt
+                        displayFulfillmentStatus
+                        displayFinancialStatus
+                        customer {
+                            firstName
+                            lastName
+                            email
+                        }
+                        shippingAddress {
+                            address1
+                            city
+                            province
+                            country
+                            zip
+                        }
+                        tags
+                        lineItems(first: 10) {
+                            edges {
+                                node {
+                                    title
+                                    quantity
+                                    originalUnitPriceSet {
+                                        shopMoney {
+                                            amount
+                                            currencyCode
+                                        }
+                                    }
+                                    variant {
+                                        id
+                                        sku
+                                        inventoryQuantity
+                                        product {
+                                            vendor
+                                            productType
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        customAttributes {
+                            key
+                            value
+                        }
                     }
                 }
                 userErrors {
@@ -126,17 +224,17 @@ class ShopifyGraphQLClient:
         }
         '''
         
-        result = self.execute_query(mutation, variables={"input": order_data})
+        complete_result = self.execute_query(complete_mutation, variables={"id": draft_order_id})
         
-        if not result or 'orderCreate' not in result:
-            raise HTTPException(status_code=500, detail="Failed to create order")
+        if not complete_result or 'draftOrderComplete' not in complete_result:
+            raise HTTPException(status_code=500, detail="Failed to complete draft order")
             
-        user_errors = result['orderCreate'].get('userErrors', [])
+        user_errors = complete_result['draftOrderComplete'].get('userErrors', [])
         if user_errors:
             error_messages = '; '.join(error.get('message', 'Unknown error') for error in user_errors)
-            raise HTTPException(status_code=400, detail=f"Failed to create order: {error_messages}")
+            raise HTTPException(status_code=400, detail=f"Failed to complete draft order: {error_messages}")
             
-        return result['orderCreate']
+        return complete_result['draftOrderComplete']
 
     def get_inventory_item_id(self, variant_id: str) -> str:
         """Get inventory item ID for a variant."""

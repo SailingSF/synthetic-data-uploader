@@ -8,12 +8,14 @@ order_instructions: |
   The response must be a JSON object with 'orders' as the root key.
 
   When generating orders, follow these guidelines:
-  1. Create realistic customer profiles with valid email formats
+  1. Create realistic customer profiles with valid email formats and addresses
   2. Use appropriate price ranges from the provided product data
   3. Generate plausible order quantities (typically 1-5 items per order)
   4. Create timestamps within the specified date range
   5. Ensure line items reference valid product variants
-  6. Maintain realistic patterns in customer purchasing behavior
+  6. Generate realistic shipping addresses and customer information
+  7. Include appropriate tags and custom attributes
+  8. Create realistic order totals including taxes and shipping
 
 order_generation: |
   Generate {count} realistic orders using the following products:
@@ -22,21 +24,37 @@ order_generation: |
   The orders should be generated within the last {date_range_days} days.
 
   Return a JSON object with an 'orders' array containing the generated orders.
-  Each order must follow this exact structure:
+  Each order must follow this exact structure for Shopify draft orders:
   {{
-    "customer": {{
-      "first_name": "string",
-      "last_name": "string",
-      "email": "string"
-    }},
-    "line_items": [
+    "email": "string (valid email)",
+    "tags": ["AI_GENERATED"],
+    "lineItems": [
       {{
-        "variant_id": "integer",
-        "quantity": "integer",
-        "price": "number"
+        "variantId": "string (format: gid://shopify/ProductVariant/INTEGER_ID)",
+        "quantity": "integer (1-5)",
+        "taxable": true
       }}
     ],
-    "created_at": "ISO8601 timestamp"
+    "shippingAddress": {{
+      "address1": "string",
+      "city": "string",
+      "province": "string",
+      "country": "string",
+      "zip": "string",
+      "firstName": "string",
+      "lastName": "string"
+    }},
+    "note": "Created via Synthetic Data Generator",
+    "customAttributes": [
+      {{
+        "key": "source",
+        "value": "synthetic_data"
+      }},
+      {{
+        "key": "generated_at",
+        "value": "ISO8601 timestamp"
+      }}
+    ]
   }}
 
 order_schema: |
@@ -92,41 +110,68 @@ order_schema: |
         "type": "object",
         "properties": {
           "variant_id": {
-            "type": "integer"
-          },
-          "product_id": {
-            "type": "integer"
-          },
-          "title": {
-            "type": "string"
-          },
-          "variant_title": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^gid://shopify/ProductVariant/\\d+$"
           },
           "quantity": {
-            "type": "integer"
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
           },
-          "price": {
-            "type": "number"
-          },
-          "sku": {
-            "type": "string"
+          "taxable": {
+            "type": "boolean",
+            "default": true
           }
         }
       }
     },
-    "total_price": {
-      "type": "number"
+    "total_price_set": {
+      "type": "object",
+      "properties": {
+        "shop_money": {
+          "type": "object",
+          "properties": {
+            "amount": {
+              "type": "string"
+            },
+            "currency_code": {
+              "type": "string"
+            }
+          }
+        }
+      }
     },
-    "financial_status": {
-      "type": "string",
-      "enum": ["paid", "pending", "refunded"],
-      "description": "Payment status of the order"
+    "subtotal_price_set": {
+      "type": "object",
+      "properties": {
+        "shop_money": {
+          "type": "object",
+          "properties": {
+            "amount": {
+              "type": "string"
+            },
+            "currency_code": {
+              "type": "string"
+            }
+          }
+        }
+      }
     },
-    "fulfillment_status": {
-      "type": "string",
-      "enum": [null, "fulfilled", "partial"],
-      "description": "Fulfillment status of the order"
+    "total_tax_set": {
+      "type": "object",
+      "properties": {
+        "shop_money": {
+          "type": "object",
+          "properties": {
+            "amount": {
+              "type": "string"
+            },
+            "currency_code": {
+              "type": "string"
+            }
+          }
+        }
+      }
     }
   }
 
@@ -139,95 +184,89 @@ order_response_schema: |
         "items": {
           "type": "object",
           "properties": {
-            "created_at": {
+            "email": {
               "type": "string",
-              "format": "date-time",
-              "description": "ISO format timestamp"
+              "format": "email"
             },
-            "customer": {
-              "type": "object",
-              "properties": {
-                "first_name": {
-                  "type": "string"
-                },
-                "last_name": {
-                  "type": "string"
-                },
-                "email": {
-                  "type": "string"
-                },
-                "default_address": {
-                  "type": "object",
-                  "properties": {
-                    "address1": {
-                      "type": "string"
-                    },
-                    "city": {
-                      "type": "string"
-                    },
-                    "province_code": {
-                      "type": "string"
-                    },
-                    "zip": {
-                      "type": "string"
-                    },
-                    "country_code": {
-                      "type": "string"
-                    },
-                    "name": {
-                      "type": "string"
-                    },
-                    "phone": {
-                      "type": "string"
-                    }
-                  }
-                }
+            "tags": {
+              "type": "array",
+              "items": {
+                "type": "string"
               },
-              "required": ["first_name", "last_name", "email"]
+              "default": ["AI_GENERATED"]
             },
-            "line_items": {
+            "lineItems": {
               "type": "array",
               "items": {
                 "type": "object",
                 "properties": {
-                  "variant_id": {
-                    "type": "integer"
-                  },
-                  "product_id": {
-                    "type": "integer"
-                  },
-                  "title": {
-                    "type": "string"
-                  },
-                  "variant_title": {
-                    "type": "string"
+                  "variantId": {
+                    "type": "string",
+                    "pattern": "^gid://shopify/ProductVariant/\\d+$"
                   },
                   "quantity": {
-                    "type": "integer"
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 5
                   },
-                  "price": {
-                    "type": "number"
+                  "taxable": {
+                    "type": "boolean",
+                    "default": true
+                  }
+                },
+                "required": ["variantId", "quantity"]
+              },
+              "minItems": 1
+            },
+            "shippingAddress": {
+              "type": "object",
+              "properties": {
+                "address1": {
+                  "type": "string"
+                },
+                "city": {
+                  "type": "string"
+                },
+                "province": {
+                  "type": "string"
+                },
+                "country": {
+                  "type": "string"
+                },
+                "zip": {
+                  "type": "string"
+                },
+                "firstName": {
+                  "type": "string"
+                },
+                "lastName": {
+                  "type": "string"
+                }
+              },
+              "required": ["address1", "city", "province", "country", "zip", "firstName", "lastName"]
+            },
+            "note": {
+              "type": "string",
+              "const": "Created via Synthetic Data Generator"
+            },
+            "customAttributes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "key": {
+                    "type": "string"
                   },
-                  "sku": {
+                  "value": {
                     "type": "string"
                   }
                 },
-                "required": ["variant_id", "quantity", "price"]
-              }
-            },
-            "total_price": {
-              "type": "number"
-            },
-            "financial_status": {
-              "type": "string",
-              "enum": ["paid", "pending", "refunded"]
-            },
-            "fulfillment_status": {
-              "type": "string",
-              "enum": [null, "fulfilled", "partial"]
+                "required": ["key", "value"]
+              },
+              "minItems": 2
             }
           },
-          "required": ["customer", "line_items", "created_at", "total_price"]
+          "required": ["email", "tags", "lineItems", "shippingAddress", "note", "customAttributes"]
         }
       }
     },

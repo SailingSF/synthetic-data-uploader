@@ -58,25 +58,53 @@ async def generate_orders(request: GenerationRequest):
     
     # Create orders in Shopify
     created_orders = []
+    failed_orders = []
+    
     for order in generated_orders:
         try:
-            result = client.create_regular_order({
-                "lineItems": [{
-                    "quantity": item["quantity"],
-                    "variantId": f"gid://shopify/ProductVariant/{item['variant_id']}"
-                } for item in order["line_items"]],
-                "email": order["customer"]["email"],
-                "tags": ["AI_GENERATED"]
-            })
-            if result.get("orderCreate", {}).get("order"):
-                created_orders.append(order)
+            # Debug: Print the order structure
+            print("Generated order structure:", order)
+            
+            # Ensure line items are properly formatted
+            if "lineItems" not in order:
+                print("Warning: lineItems not found in order")
+                continue
+            
+            result = client.create_regular_order(order)
+            if result.get("draftOrder", {}).get("order"):
+                order_details = result["draftOrder"]["order"]
+                created_orders.append({
+                    "id": order_details["id"],
+                    "name": order_details["name"],
+                    "email": order_details["customer"]["email"],
+                    "total": order_details["totalPriceSet"]["shopMoney"]["amount"],
+                    "status": {
+                        "financial": order_details["displayFinancialStatus"],
+                        "fulfillment": order_details["displayFulfillmentStatus"]
+                    },
+                    "items": len(order["lineItems"])
+                })
+            else:
+                failed_orders.append({
+                    "email": order["email"],
+                    "items": len(order["lineItems"]),
+                    "error": "Failed to complete draft order"
+                })
         except Exception as e:
-            print(f"Error creating order: {e}")
+            print(f"Error creating order: {str(e)}")
+            print(f"Order data: {order}")
+            failed_orders.append({
+                "email": order.get("email", "unknown"),
+                "items": len(order.get("lineItems", [])),
+                "error": str(e)
+            })
             continue
     
     return GenerationResponse(
-        message=f"Created {len(created_orders)} orders",
-        items=created_orders
+        message=f"Successfully created {len(created_orders)} orders, {len(failed_orders)} failed",
+        items=created_orders,
+        failed_items=failed_orders,
+        success=len(created_orders) > 0
     )
 
 @app.post("/generate-inventory", response_model=GenerationResponse)
