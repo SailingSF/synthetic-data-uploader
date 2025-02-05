@@ -8,68 +8,176 @@ import {
   Card,
   Button,
   BlockStack,
-  Box,
-  Select,
   TextField,
   Banner,
+  List,
+  DataTable,
+  Badge,
 } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 
-type ActionResponse = 
-  | { success: true; data: any; error?: never }
-  | { success: false; error: string; data?: never };
+type OrderStatus = {
+  financial: string;
+  fulfillment: string;
+};
+
+type Order = {
+  id: string;
+  name: string;
+  email: string;
+  total: string;
+  status: OrderStatus;
+  items: number;
+};
+
+type FailedOrder = {
+  email: string;
+  items: number;
+  error: string;
+};
+
+type ApiResponse = {
+  success: boolean;
+  message: string;
+  items: Order[];
+  failed_items?: FailedOrder[];
+};
+
+type FetcherData = {
+  success: boolean;
+  data: ApiResponse;
+  error?: string;
+};
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  await authenticate.admin(request);
-  return null;
+  const { session } = await authenticate.admin(request);
+  return { accessToken: session.accessToken };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { session } = await authenticate.admin(request);
-  
   const formData = await request.formData();
-  const dataType = formData.get("dataType");
+  const action = formData.get("action");
   const count = formData.get("count");
+  const dateRange = formData.get("dateRange");
 
   try {
-    // Call local FastAPI backend
-    const response = await fetch("http://localhost:8000/generate", {
+    const endpoint = action === "preview" ? "/preview" :
+                    action === "generate-orders" ? "/generate-orders" :
+                    action === "generate-inventory" ? "/generate-inventory" :
+                    action === "clear" ? "/clear-orders" :
+                    "/reset-inventory";
+
+    const response = await fetch(`http://localhost:8000${endpoint}`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        type: dataType,
-        count: parseInt(count as string),
-        shop_access_token: session.accessToken,
+        shop_url: session.shop,
+        access_token: session.accessToken,
+        num_items: parseInt(count as string) || 5,
+        date_range_days: parseInt(dateRange as string) || 30
       }),
     });
 
-    if (!response.ok) {
-      throw new Error("Failed to generate data");
-    }
-
-    const result = await response.json();
-    return { success: true, data: result } as ActionResponse;
+    const data = await response.json();
+    return { success: true, data };
   } catch (error) {
-    if (error instanceof Error) {
-      return { success: false, error: error.message } as ActionResponse;
-    }
-    return { success: false, error: "An unknown error occurred" } as ActionResponse;
+    return { success: false, error: error instanceof Error ? error.message : "An error occurred" };
   }
 };
 
 export default function Index() {
-  const fetcher = useFetcher<ActionResponse>();
-  const [dataType, setDataType] = useState("products");
-  const [count, setCount] = useState("10");
+  const fetcher = useFetcher<FetcherData>();
+  const [count, setCount] = useState("5");
+  const [dateRange, setDateRange] = useState("30");
 
   const isLoading = fetcher.state !== "idle";
 
-  const handleGenerate = () => {
+  const renderOrdersTable = (orders: Order[]) => {
+    const rows = orders.map((order) => [
+      <Text as="span" variant="bodyMd">{order.name}</Text>,
+      <Text as="span" variant="bodyMd">{order.email}</Text>,
+      <Text as="span" variant="bodyMd">${order.total}</Text>,
+      <Badge tone={order.status.financial === "PAID" ? "success" : "attention"}>
+        {order.status.financial}
+      </Badge>,
+      <Badge tone={order.status.fulfillment === "FULFILLED" ? "success" : "attention"}>
+        {order.status.fulfillment}
+      </Badge>,
+      <Text as="span" variant="bodyMd">{order.items}</Text>
+    ]);
+
+    return (
+      <DataTable
+        columnContentTypes={[
+          'text',
+          'text',
+          'numeric',
+          'text',
+          'text',
+          'numeric'
+        ]}
+        headings={[
+          'Order',
+          'Customer',
+          'Total',
+          'Payment',
+          'Fulfillment',
+          'Items'
+        ]}
+        rows={rows}
+      />
+    );
+  };
+
+  const renderResults = () => {
+    if (!fetcher.data) return null;
+
+    const { success, data, error } = fetcher.data;
+    if (!success) {
+      return (
+        <Banner tone="critical">
+          <Text as="p">Error: {error}</Text>
+        </Banner>
+      );
+    }
+
+    if (data.success === false) {
+      return (
+        <Banner tone="warning">
+          <Text as="p">{data.message}</Text>
+          {data.failed_items && data.failed_items.length > 0 && (
+            <List type="bullet">
+              {data.failed_items.map((item: FailedOrder, index: number) => (
+                <List.Item key={index}>
+                  {item.email} ({item.items} items) - {item.error}
+                </List.Item>
+              ))}
+            </List>
+          )}
+        </Banner>
+      );
+    }
+
+    return (
+      <BlockStack gap="400">
+        <Banner tone="success">
+          <Text as="p">{data.message}</Text>
+        </Banner>
+
+        {data.items && data.items.length > 0 && (
+          <Card>
+            {renderOrdersTable(data.items)}
+          </Card>
+        )}
+      </BlockStack>
+    );
+  };
+
+  const handleAction = (action: string) => {
     fetcher.submit(
-      { dataType, count },
+      { action, count, dateRange }, 
       { method: "POST" }
     );
   };
@@ -85,21 +193,6 @@ export default function Index() {
                 <Text as="h2" variant="headingMd">
                   Generate Synthetic Data
                 </Text>
-                <Text variant="bodyMd" as="p">
-                  Use this tool to generate synthetic data for your Shopify store. Choose the type of data
-                  and the number of items you want to generate.
-                </Text>
-
-                <Select
-                  label="Data Type"
-                  options={[
-                    {label: "Products", value: "products"},
-                    {label: "Customers", value: "customers"},
-                    {label: "Orders", value: "orders"}
-                  ]}
-                  onChange={setDataType}
-                  value={dataType}
-                />
 
                 <TextField
                   label="Number of items"
@@ -107,44 +200,64 @@ export default function Index() {
                   value={count}
                   onChange={setCount}
                   autoComplete="off"
+                  disabled={isLoading}
                 />
 
-                <Button
-                  onClick={handleGenerate}
-                  loading={isLoading}
-                >
-                  Generate Data
-                </Button>
+                <TextField
+                  label="Date range (days)"
+                  type="number"
+                  value={dateRange}
+                  onChange={setDateRange}
+                  autoComplete="off"
+                  disabled={isLoading}
+                />
 
-                {fetcher.data && (
-                  <Banner
-                    title={fetcher.data.success ? "Success!" : "Error"}
-                    tone={fetcher.data.success ? "success" : "critical"}
+                <BlockStack gap="200">
+                  <Button
+                    onClick={() => handleAction("preview")}
+                    loading={isLoading && fetcher.formData?.get("action") === "preview"}
+                    disabled={isLoading}
                   >
-                    <p>
-                      {fetcher.data.success
-                        ? `Successfully generated ${count} ${dataType}`
-                        : `Error: ${fetcher.data.error}`}
-                    </p>
-                  </Banner>
-                )}
+                    Preview Data
+                  </Button>
 
-                {fetcher.data?.success && fetcher.data.data && (
-                  <Box
-                    padding="400"
-                    background="bg-surface-active"
-                    borderWidth="025"
-                    borderRadius="200"
-                    borderColor="border"
-                    overflowX="scroll"
+                  <Button
+                    onClick={() => handleAction("generate-orders")}
+                    loading={isLoading && fetcher.formData?.get("action") === "generate-orders"}
+                    disabled={isLoading}
+                    variant="primary"
                   >
-                    <pre style={{ margin: 0 }}>
-                      <code>
-                        {JSON.stringify(fetcher.data.data, null, 2)}
-                      </code>
-                    </pre>
-                  </Box>
-                )}
+                    Generate Orders
+                  </Button>
+
+                  <Button
+                    onClick={() => handleAction("generate-inventory")}
+                    loading={isLoading && fetcher.formData?.get("action") === "generate-inventory"}
+                    disabled={isLoading}
+                  >
+                    Generate Inventory
+                  </Button>
+
+                  <Button
+                    onClick={() => handleAction("clear")}
+                    loading={isLoading && fetcher.formData?.get("action") === "clear"}
+                    disabled={isLoading}
+                    tone="critical"
+                  >
+                    Clear Generated Orders
+                  </Button>
+
+                  <Button
+                    onClick={() => handleAction("reset")}
+                    loading={isLoading && fetcher.formData?.get("action") === "reset"}
+                    disabled={isLoading}
+                    tone="critical"
+                  >
+                    Reset Inventory
+                  </Button>
+                </BlockStack>
+
+                {renderResults()}
               </BlockStack>
             </Card>
           </Layout.Section>
