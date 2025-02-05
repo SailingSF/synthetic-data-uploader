@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from generators.ai_generator import AIDataGenerator
 from shopify_client import ShopifyGraphQLClient
 from models import GenerationRequest, GenerationResponse, PreviewResponse
+import shopify
 
 # Load environment variables
 load_dotenv()
@@ -26,12 +27,22 @@ ai_generator = AIDataGenerator()
 
 def get_shopify_client(request: GenerationRequest) -> ShopifyGraphQLClient:
     """Create Shopify client from request."""
-    return ShopifyGraphQLClient(request.shop_url, request.access_token)
+    try:
+        shopify.Session.setup(
+            api_key=os.getenv('SHOPIFY_API_KEY'),
+            secret=os.getenv('SHOPIFY_API_SECRET')
+        )
+        return ShopifyGraphQLClient(request.shop_url, request.access_token)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to initialize Shopify session: {str(e)}"
+        )
 
 @app.post("/generate-orders", response_model=GenerationResponse)
 async def generate_orders(request: GenerationRequest):
     """Generate and create synthetic orders."""
-    client = ShopifyGraphQLClient(request.shop_url, request.access_token)
+    client = get_shopify_client(request)
     
     # Fetch store products
     products = client.fetch_products()

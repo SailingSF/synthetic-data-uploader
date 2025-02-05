@@ -15,6 +15,9 @@ class AIDataGenerator:
         prompts_path = Path(__file__).parent.parent / "prompts.yaml"
         with open(prompts_path) as f:
             self.prompts = yaml.safe_load(f)
+            # Load schemas directly since they are now valid JSON
+            self.order_schema = json.loads(self.prompts["order_schema"])
+            self.inventory_schema = json.loads(self.prompts["inventory_schema"])
 
     def generate_orders(
         self,
@@ -23,7 +26,7 @@ class AIDataGenerator:
         date_range_days: int = 30
     ) -> List[Dict[str, Any]]:
         """Generate synthetic orders."""
-        # Define the expected response schema
+        # Define the expected response schema based on the YAML schema
         response_schema = {
             "type": "object",
             "properties": {
@@ -31,31 +34,8 @@ class AIDataGenerator:
                     "type": "array",
                     "items": {
                         "type": "object",
-                        "properties": {
-                            "customer": {
-                                "type": "object",
-                                "properties": {
-                                    "first_name": {"type": "string"},
-                                    "last_name": {"type": "string"},
-                                    "email": {"type": "string"}
-                                },
-                                "required": ["first_name", "last_name", "email"]
-                            },
-                            "line_items": {
-                                "type": "array",
-                                "items": {
-                                    "type": "object",
-                                    "properties": {
-                                        "variant_id": {"type": "integer"},
-                                        "quantity": {"type": "integer"},
-                                        "price": {"type": "number"}
-                                    },
-                                    "required": ["variant_id", "quantity", "price"]
-                                }
-                            },
-                            "created_at": {"type": "string", "format": "date-time"}
-                        },
-                        "required": ["customer", "line_items", "created_at"]
+                        "properties": self.order_schema,
+                        "required": ["customer", "line_items", "created_at", "total_price"]
                     }
                 }
             },
@@ -63,7 +43,7 @@ class AIDataGenerator:
         }
 
         agent = OpenAIAgent(
-            instructions=self.prompts["base_instructions"],
+            instructions=self.prompts["order_instructions"],
             structured_output=response_schema
         )
         
@@ -100,7 +80,7 @@ class AIDataGenerator:
         count: int = 5
     ) -> List[Dict[str, Any]]:
         """Generate synthetic inventory adjustments."""
-        # Define the expected response schema
+        # Define the expected response schema based on the YAML schema
         response_schema = {
             "type": "object",
             "properties": {
@@ -108,16 +88,8 @@ class AIDataGenerator:
                     "type": "array",
                     "items": {
                         "type": "object",
-                        "properties": {
-                            "variant_id": {"type": "integer"},
-                            "adjustment": {"type": "integer", "minimum": -5, "maximum": 10},
-                            "reason": {
-                                "type": "string",
-                                "enum": ["recount", "received", "damaged", "sold"]
-                            },
-                            "timestamp": {"type": "string", "format": "date-time"}
-                        },
-                        "required": ["variant_id", "adjustment", "reason", "timestamp"]
+                        "properties": self.inventory_schema,
+                        "required": ["variant_id", "product_id", "adjustment", "reason", "timestamp"]
                     }
                 }
             },
@@ -125,7 +97,7 @@ class AIDataGenerator:
         }
 
         agent = OpenAIAgent(
-            instructions=self.prompts["base_instructions"],
+            instructions=self.prompts["inventory_instructions"],
             structured_output=response_schema
         )
         

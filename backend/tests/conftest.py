@@ -12,6 +12,7 @@ import logging.handlers
 import atexit
 import shutil
 import tempfile
+import shopify
 
 # Configure logging with a more robust setup
 def setup_logging():
@@ -153,13 +154,12 @@ class TestClientWithLogging:
 @pytest.fixture
 def test_client(client):
     """Fixture that provides an enhanced test client with logging."""
+    # Initialize Shopify session
+    shopify.Session.setup(
+        api_key=os.getenv('SHOPIFY_API_KEY'),
+        secret=os.getenv('SHOPIFY_API_SECRET')
+    )
     return TestClientWithLogging(client)
-
-@pytest.fixture
-def test_client():
-    """Create a test client."""
-    from main import app
-    return TestClient(app)
 
 @pytest.fixture
 def temp_data_dir():
