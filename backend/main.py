@@ -60,7 +60,7 @@ async def generate_orders(request: GenerationRequest):
     created_orders = []
     for order in generated_orders:
         try:
-            result = client.create_draft_order({
+            result = client.create_regular_order({
                 "lineItems": [{
                     "quantity": item["quantity"],
                     "variantId": f"gid://shopify/ProductVariant/{item['variant_id']}"
@@ -68,7 +68,7 @@ async def generate_orders(request: GenerationRequest):
                 "email": order["customer"]["email"],
                 "tags": ["AI_GENERATED"]
             })
-            if result.get("draftOrderCreate", {}).get("draftOrder"):
+            if result.get("orderCreate", {}).get("order"):
                 created_orders.append(order)
         except Exception as e:
             print(f"Error creating order: {e}")
@@ -148,6 +148,26 @@ async def preview_data(request: GenerationRequest):
         sample_data=sample_orders + sample_adjustments,
         available_products=len(products)
     )
+
+@app.delete("/clear-orders")
+async def clear_synthetic_orders(request: GenerationRequest):
+    """Delete all AI-generated orders."""
+    client = get_shopify_client(request)
+    result = client.delete_ai_generated_orders()
+    return {
+        "message": f"Deleted {result['deleted_count']} AI-generated orders",
+        "deleted_count": result['deleted_count']
+    }
+
+@app.post("/reset-inventory")
+async def reset_inventory(request: GenerationRequest):
+    """Reset inventory levels to base level."""
+    client = get_shopify_client(request)
+    result = client.reset_inventory_levels()
+    return {
+        "message": f"Reset inventory for {result['adjusted_count']} variants",
+        "adjusted_count": result['adjusted_count']
+    }
 
 @app.get("/health")
 async def health_check():

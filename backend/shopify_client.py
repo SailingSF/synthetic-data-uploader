@@ -104,12 +104,12 @@ class ShopifyGraphQLClient:
             "vendor": product['node']['vendor']
         } for product in result['products']['edges']]
 
-    def create_draft_order(self, order_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Create a draft order using GraphQL."""
+    def create_regular_order(self, order_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a regular order using GraphQL."""
         mutation = '''
-        mutation draftOrderCreate($input: DraftOrderInput!) {
-            draftOrderCreate(input: $input) {
-                draftOrder {
+        mutation orderCreate($input: OrderInput!) {
+            orderCreate(input: $input) {
+                order {
                     id
                     totalPrice
                     createdAt
@@ -128,15 +128,15 @@ class ShopifyGraphQLClient:
         
         result = self.execute_query(mutation, variables={"input": order_data})
         
-        if not result or 'draftOrderCreate' not in result:
-            raise HTTPException(status_code=500, detail="Failed to create draft order")
+        if not result or 'orderCreate' not in result:
+            raise HTTPException(status_code=500, detail="Failed to create order")
             
-        user_errors = result['draftOrderCreate'].get('userErrors', [])
+        user_errors = result['orderCreate'].get('userErrors', [])
         if user_errors:
             error_messages = '; '.join(error.get('message', 'Unknown error') for error in user_errors)
-            raise HTTPException(status_code=400, detail=f"Failed to create draft order: {error_messages}")
+            raise HTTPException(status_code=400, detail=f"Failed to create order: {error_messages}")
             
-        return result['draftOrderCreate']
+        return result['orderCreate']
 
     def get_inventory_item_id(self, variant_id: str) -> str:
         """Get inventory item ID for a variant."""
@@ -215,6 +215,81 @@ class ShopifyGraphQLClient:
             raise HTTPException(status_code=400, detail=f"Failed to adjust inventory: {error_messages}")
             
         return result['inventoryAdjustQuantity']
+
+    def delete_ai_generated_orders(self) -> Dict[str, Any]:
+        """Delete all orders tagged as AI_GENERATED."""
+        # First query for AI generated orders
+        query = '''
+        {
+            orders(first: 250, query: "tag:AI_GENERATED") {
+                edges {
+                    node {
+                        id
+                    }
+                }
+            }
+        }
+        '''
+        
+        result = self.execute_query(query)
+        deleted_count = 0
+        
+        if result and 'orders' in result:
+            for order in result['orders']['edges']:
+                mutation = '''
+                mutation orderDelete($input: OrderDeleteInput!) {
+                    orderDelete(input: $input) {
+                        deletedId
+                        userErrors {
+                            field
+                            message
+                        }
+                    }
+                }
+                '''
+                
+                delete_result = self.execute_query(mutation, variables={
+                    "input": {"id": order['node']['id']}
+                })
+                
+                if delete_result and 'orderDelete' in delete_result:
+                    if delete_result['orderDelete'].get('deletedId'):
+                        deleted_count += 1
+                    elif delete_result['orderDelete'].get('userErrors'):
+                        errors = delete_result['orderDelete']['userErrors']
+                        error_messages = '; '.join(error.get('message', 'Unknown error') for error in errors)
+                        print(f"Error deleting order {order['node']['id']}: {error_messages}")
+        
+        return {"deleted_count": deleted_count}
+
+    def reset_inventory_levels(self) -> Dict[str, Any]:
+        """Reset inventory levels for all products to a base level."""
+        # First get all products with their inventory
+        products = self.fetch_products()
+        location_id = self.get_location_id()
+        adjusted_count = 0
+        
+        for product in products:
+            for variant in product['variants']:
+                try:
+                    # Reset to a reasonable base level (e.g., 10)
+                    current_quantity = variant['inventory_quantity']
+                    if current_quantity != 10:
+                        inventory_item_id = self.get_inventory_item_id(f"gid://shopify/ProductVariant/{variant['id']}")
+                        adjustment = 10 - current_quantity
+                        
+                        self.adjust_inventory(
+                            inventory_item_id=inventory_item_id,
+                            location_id=location_id,
+                            delta=adjustment,
+                            reason="RESET"
+                        )
+                        adjusted_count += 1
+                except Exception as e:
+                    print(f"Error resetting inventory for variant {variant['id']}: {e}")
+                    continue
+        
+        return {"adjusted_count": adjusted_count}
 
     def __del__(self):
         """Clean up Shopify session."""
