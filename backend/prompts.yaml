@@ -130,6 +130,110 @@ order_schema: |
     }
   }
 
+order_response_schema: |
+  {
+    "type": "object",
+    "properties": {
+      "orders": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "created_at": {
+              "type": "string",
+              "format": "date-time",
+              "description": "ISO format timestamp"
+            },
+            "customer": {
+              "type": "object",
+              "properties": {
+                "first_name": {
+                  "type": "string"
+                },
+                "last_name": {
+                  "type": "string"
+                },
+                "email": {
+                  "type": "string"
+                },
+                "default_address": {
+                  "type": "object",
+                  "properties": {
+                    "address1": {
+                      "type": "string"
+                    },
+                    "city": {
+                      "type": "string"
+                    },
+                    "province_code": {
+                      "type": "string"
+                    },
+                    "zip": {
+                      "type": "string"
+                    },
+                    "country_code": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "phone": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "required": ["first_name", "last_name", "email"]
+            },
+            "line_items": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "variant_id": {
+                    "type": "integer"
+                  },
+                  "product_id": {
+                    "type": "integer"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "variant_title": {
+                    "type": "string"
+                  },
+                  "quantity": {
+                    "type": "integer"
+                  },
+                  "price": {
+                    "type": "number"
+                  },
+                  "sku": {
+                    "type": "string"
+                  }
+                },
+                "required": ["variant_id", "quantity", "price"]
+              }
+            },
+            "total_price": {
+              "type": "number"
+            },
+            "financial_status": {
+              "type": "string",
+              "enum": ["paid", "pending", "refunded"]
+            },
+            "fulfillment_status": {
+              "type": "string",
+              "enum": [null, "fulfilled", "partial"]
+            }
+          },
+          "required": ["customer", "line_items", "created_at", "total_price"]
+        }
+      }
+    },
+    "required": ["orders"]
+  }
+
 # Inventory Adjustment Generation
 inventory_instructions: |
   You are a synthetic inventory adjustment generator for a Shopify store. Your task is to generate realistic, 
@@ -184,4 +288,43 @@ inventory_schema: |
       "format": "date-time",
       "description": "ISO format timestamp"
     }
+  }
+
+inventory_response_schema: |
+  {
+    "type": "object",
+    "properties": {
+      "adjustments": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "variant_id": {
+              "type": "integer"
+            },
+            "product_id": {
+              "type": "integer"
+            },
+            "adjustment": {
+              "type": "integer",
+              "minimum": -5,
+              "maximum": 10
+            },
+            "sku": {
+              "type": "string"
+            },
+            "reason": {
+              "type": "string",
+              "enum": ["recount", "received", "damaged", "sold"]
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "required": ["variant_id", "product_id", "adjustment", "reason", "timestamp"]
+        }
+      }
+    },
+    "required": ["adjustments"]
   } 

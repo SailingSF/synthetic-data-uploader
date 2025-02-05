@@ -15,9 +15,9 @@ class AIDataGenerator:
         prompts_path = Path(__file__).parent.parent / "prompts.yaml"
         with open(prompts_path) as f:
             self.prompts = yaml.safe_load(f)
-            # Load schemas directly since they are now valid JSON
-            self.order_schema = json.loads(self.prompts["order_schema"])
-            self.inventory_schema = json.loads(self.prompts["inventory_schema"])
+            # Load response schemas
+            self.order_response_schema = json.loads(self.prompts["order_response_schema"])
+            self.inventory_response_schema = json.loads(self.prompts["inventory_response_schema"])
 
     def generate_orders(
         self,
@@ -26,25 +26,9 @@ class AIDataGenerator:
         date_range_days: int = 30
     ) -> List[Dict[str, Any]]:
         """Generate synthetic orders."""
-        # Define the expected response schema based on the YAML schema
-        response_schema = {
-            "type": "object",
-            "properties": {
-                "orders": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": self.order_schema,
-                        "required": ["customer", "line_items", "created_at", "total_price"]
-                    }
-                }
-            },
-            "required": ["orders"]
-        }
-
         agent = OpenAIAgent(
             instructions=self.prompts["order_instructions"],
-            structured_output=response_schema
+            structured_output=self.order_response_schema
         )
         
         # Format products for the prompt
@@ -80,25 +64,9 @@ class AIDataGenerator:
         count: int = 5
     ) -> List[Dict[str, Any]]:
         """Generate synthetic inventory adjustments."""
-        # Define the expected response schema based on the YAML schema
-        response_schema = {
-            "type": "object",
-            "properties": {
-                "adjustments": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": self.inventory_schema,
-                        "required": ["variant_id", "product_id", "adjustment", "reason", "timestamp"]
-                    }
-                }
-            },
-            "required": ["adjustments"]
-        }
-
         agent = OpenAIAgent(
             instructions=self.prompts["inventory_instructions"],
-            structured_output=response_schema
+            structured_output=self.inventory_response_schema
         )
         
         # Format products for the prompt
