@@ -1,7 +1,7 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
 client_id = "6624a238c367756578cc68076945f07a"
-application_url = "https://pit-knows-trunk-birthday.trycloudflare.com"
+application_url = "https://superintendent-spectrum-across-newsletters.trycloudflare.com"
 embedded = true
 name = "synthetic-data-uploader"
 handle = "synthetic-data-uploader"
@@ -19,13 +19,13 @@ api_version = "2025-01"
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "write_products,read_products,write_inventory,read_inventory,read_orders,write_orders,write_order_edits,read_customers,write_customers"
+scopes = "write_products,read_products,write_inventory,read_inventory,read_orders,write_orders,write_order_edits,read_customers,write_customers,write_draft_orders,read_draft_orders"
 
 [auth]
 redirect_urls = [
-  "https://pit-knows-trunk-birthday.trycloudflare.com/auth/callback",
-  "https://pit-knows-trunk-birthday.trycloudflare.com/auth/shopify/callback",
-  "https://pit-knows-trunk-birthday.trycloudflare.com/api/auth/callback"
+  "https://superintendent-spectrum-across-newsletters.trycloudflare.com/auth/callback",
+  "https://superintendent-spectrum-across-newsletters.trycloudflare.com/auth/shopify/callback",
+  "https://superintendent-spectrum-across-newsletters.trycloudflare.com/api/auth/callback"
 ]
 
 [pos]
