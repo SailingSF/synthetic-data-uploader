@@ -96,16 +96,16 @@ export default function Index() {
 
   const renderOrdersTable = (orders: Order[]) => {
     const rows = orders.map((order) => [
-      <Text as="span" variant="bodyMd">{order.name}</Text>,
-      <Text as="span" variant="bodyMd">{order.email}</Text>,
-      <Text as="span" variant="bodyMd">${order.total}</Text>,
-      <Badge tone={order.status.financial === "PAID" ? "success" : "attention"}>
+      <Text key={`name-${order.id}`} as="span" variant="bodyMd">{order.name}</Text>,
+      <Text key={`email-${order.id}`} as="span" variant="bodyMd">{order.email}</Text>,
+      <Text key={`total-${order.id}`} as="span" variant="bodyMd">${order.total}</Text>,
+      <Badge key={`financial-${order.id}`} tone={order.status.financial === "PAID" ? "success" : "attention"}>
         {order.status.financial}
       </Badge>,
-      <Badge tone={order.status.fulfillment === "FULFILLED" ? "success" : "attention"}>
+      <Badge key={`fulfillment-${order.id}`} tone={order.status.fulfillment === "FULFILLED" ? "success" : "attention"}>
         {order.status.fulfillment}
       </Badge>,
-      <Text as="span" variant="bodyMd">{order.items}</Text>
+      <Text key={`items-${order.id}`} as="span" variant="bodyMd">{order.items}</Text>
     ]);
 
     return (
