@@ -125,6 +125,7 @@ async def generate_inventory(request: GenerationRequest):
     
     # Apply adjustments
     applied = []
+    failed = []
     location_id = client.get_location_id()
     
     for adj in adjustments:
@@ -141,13 +142,24 @@ async def generate_inventory(request: GenerationRequest):
             
             if result.get("inventoryAdjustQuantity", {}).get("inventoryLevel"):
                 applied.append(adj)
+            else:
+                failed.append({
+                    "variant_id": adj["variant_id"],
+                    "error": "Failed to adjust inventory"
+                })
         except Exception as e:
             print(f"Error applying adjustment: {e}")
+            failed.append({
+                "variant_id": adj["variant_id"],
+                "error": str(e)
+            })
             continue
     
     return GenerationResponse(
         message=f"Applied {len(applied)} inventory adjustments",
-        items=applied
+        items=applied,
+        success=len(applied) > 0,
+        failed_items=failed if failed else None
     )
 
 @app.post("/preview", response_model=PreviewResponse)
@@ -177,25 +189,45 @@ async def preview_data(request: GenerationRequest):
         available_products=len(products)
     )
 
-@app.delete("/clear-orders")
+@app.post("/clear-orders", response_model=GenerationResponse)
+@app.delete("/clear-orders", response_model=GenerationResponse)
 async def clear_synthetic_orders(request: GenerationRequest):
     """Delete all AI-generated orders."""
-    client = get_shopify_client(request)
-    result = client.delete_ai_generated_orders()
-    return {
-        "message": f"Deleted {result['deleted_count']} AI-generated orders",
-        "deleted_count": result['deleted_count']
-    }
+    try:
+        print("Clear orders request:", request.dict())  # Log the incoming request
+        client = get_shopify_client(request)
+        
+        # Log before deletion attempt
+        print("Attempting to delete AI-generated orders...")
+        result = client.delete_ai_generated_orders()
+        print("Deletion result:", result)  # Log the result
+        
+        response = GenerationResponse(
+            message=f"Successfully deleted {result['deleted_count']} AI-generated orders",
+            items=[],
+            success=True,
+            failed_items=None
+        )
+        print("Sending response:", response.dict())  # Log the response
+        return response
+    except Exception as e:
+        print(f"Error in clear_synthetic_orders: {str(e)}")  # Log any errors
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to clear orders: {str(e)}"
+        )
 
-@app.post("/reset-inventory")
+@app.post("/reset-inventory", response_model=GenerationResponse)
 async def reset_inventory(request: GenerationRequest):
     """Reset inventory levels to base level."""
     client = get_shopify_client(request)
     result = client.reset_inventory_levels()
-    return {
-        "message": f"Reset inventory for {result['adjusted_count']} variants",
-        "adjusted_count": result['adjusted_count']
-    }
+    return GenerationResponse(
+        message=f"Reset inventory for {result['adjusted_count']} variants",
+        items=[],
+        success=True,
+        failed_items=None
+    )
 
 @app.get("/health")
 async def health_check():

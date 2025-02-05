@@ -323,6 +323,8 @@ class ShopifyGraphQLClient:
                 edges {
                     node {
                         id
+                        displayFinancialStatus
+                        displayFulfillmentStatus
                     }
                 }
             }
@@ -334,29 +336,89 @@ class ShopifyGraphQLClient:
         
         if result and 'orders' in result:
             for order in result['orders']['edges']:
-                mutation = '''
-                mutation orderDelete($input: OrderDeleteInput!) {
-                    orderDelete(input: $input) {
-                        deletedId
-                        userErrors {
-                            field
-                            message
+                try:
+                    order_id = order['node']['id']
+                    print(f"Processing order: {order_id}")
+                    print(f"Status - Financial: {order['node']['displayFinancialStatus']}, Fulfillment: {order['node']['displayFulfillmentStatus']}")
+                    
+                    # Cancel the order
+                    cancel_mutation = '''
+                    mutation cancelOrder(
+                        $orderId: ID!,
+                        $reason: OrderCancelReason!,
+                        $refund: Boolean!,
+                        $restock: Boolean!,
+                        $notifyCustomer: Boolean!,
+                        $staffNote: String
+                    ) {
+                        orderCancel(
+                            orderId: $orderId,
+                            reason: $reason,
+                            refund: $refund,
+                            restock: $restock,
+                            notifyCustomer: $notifyCustomer,
+                            staffNote: $staffNote
+                        ) {
+                            job {
+                                id
+                            }
+                            userErrors {
+                                field
+                                message
+                            }
                         }
                     }
-                }
-                '''
-                
-                delete_result = self.execute_query(mutation, variables={
-                    "input": {"id": order['node']['id']}
-                })
-                
-                if delete_result and 'orderDelete' in delete_result:
-                    if delete_result['orderDelete'].get('deletedId'):
-                        deleted_count += 1
-                    elif delete_result['orderDelete'].get('userErrors'):
-                        errors = delete_result['orderDelete']['userErrors']
+                    '''
+                    
+                    cancel_result = self.execute_query(cancel_mutation, variables={
+                        "orderId": order_id,
+                        "reason": "OTHER",
+                        "refund": True,
+                        "restock": True,
+                        "notifyCustomer": False,
+                        "staffNote": "Cancelled via Synthetic Data Generator"
+                    })
+                    
+                    if cancel_result.get('orderCancel', {}).get('userErrors'):
+                        errors = cancel_result['orderCancel']['userErrors']
                         error_messages = '; '.join(error.get('message', 'Unknown error') for error in errors)
-                        print(f"Error deleting order {order['node']['id']}: {error_messages}")
+                        print(f"Error cancelling order {order_id}: {error_messages}")
+                        continue
+                    
+                    # Get the job ID and poll for completion
+                    job_id = cancel_result['orderCancel']['job']['id']
+                    print(f"Cancellation job started with ID: {job_id}")
+                    
+                    # Poll for job completion
+                    job_query = '''
+                    query getJob($id: ID!) {
+                        job(id: $id) {
+                            id
+                            done
+                        }
+                    }
+                    '''
+                    
+                    import time
+                    max_attempts = 10
+                    attempt = 0
+                    
+                    while attempt < max_attempts:
+                        job_result = self.execute_query(job_query, variables={"id": job_id})
+                        if job_result.get('job', {}).get('done'):
+                            deleted_count += 1
+                            print(f"Successfully cancelled order {order_id}")
+                            break
+                        
+                        attempt += 1
+                        if attempt < max_attempts:
+                            time.sleep(1)  # Wait 1 second before polling again
+                        else:
+                            print(f"Timeout waiting for order {order_id} cancellation to complete")
+                
+                except Exception as e:
+                    print(f"Error processing order {order_id}: {str(e)}")
+                    continue
         
         return {"deleted_count": deleted_count}
 

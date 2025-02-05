@@ -15,6 +15,8 @@ class GenerationResponse(BaseModel):
     """Basic response structure for generated data."""
     message: str
     items: List[Dict[str, Any]]
+    success: bool
+    failed_items: Optional[List[Dict[str, Any]]] = None
 
 class PreviewResponse(BaseModel):
     """Preview of generated data."""
