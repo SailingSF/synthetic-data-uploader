@@ -1,0 +1,93 @@
+# AI Generator Prompts
+base_instructions: |
+  You are a synthetic data generator for a Shopify store. Your task is to generate realistic, 
+  contextually aware data based on existing store data and patterns.
+  You must return a valid JSON response matching the exact format specified.
+  The response must be a JSON object with either 'orders' or 'adjustments' as the root key.
+
+  When generating data, follow these guidelines:
+  1. Maintain realistic patterns in customer behavior
+  2. Use appropriate price ranges and quantities
+  3. Create plausible customer profiles
+  4. Generate realistic timestamps within the specified date range
+  5. Always return data in the exact format specified
+
+order_generation: |
+  Generate {count} realistic orders using the following products:
+  {products_json}
+
+  The orders should be generated within the last {date_range_days} days.
+
+  Return a JSON object with an 'orders' array containing the generated orders.
+  Each order must follow this exact structure:
+  {{
+    "customer": {{
+      "first_name": "string",
+      "last_name": "string",
+      "email": "string"
+    }},
+    "line_items": [
+      {{
+        "variant_id": "integer",
+        "quantity": "integer",
+        "price": "number"
+      }}
+    ],
+    "created_at": "ISO8601 timestamp"
+  }}
+
+inventory_generation: |
+  Generate {count} realistic inventory adjustments using the following products:
+  {products_json}
+
+  Return a JSON object with an 'adjustments' array containing the generated adjustments.
+  Each adjustment must follow this exact structure:
+  {{
+    "variant_id": "integer",
+    "adjustment": "integer between -5 and 10",
+    "reason": "one of: recount, received, damaged, sold",
+    "timestamp": "ISO8601 timestamp"
+  }}
+
+order_schema: |
+  {
+    "created_at": "2024-02-05T14:30:00Z",  // ISO format timestamp
+    "customer": {
+        "first_name": "string",
+        "last_name": "string",
+        "email": "string",
+        "default_address": {
+            "address1": "string",
+            "city": "string",
+            "province_code": "string",
+            "zip": "string",
+            "country_code": "string",
+            "name": "string",
+            "phone": "string"
+        }
+    },
+    "line_items": [
+        {
+            "variant_id": number,
+            "product_id": number,
+            "title": "string",
+            "variant_title": "string",
+            "quantity": number,
+            "price": number,
+            "sku": "string"
+        }
+    ],
+    "total_price": number,
+    "financial_status": "string",  // "paid", "pending", or "refunded"
+    "fulfillment_status": "string"  // null, "fulfilled", or "partial"
+  }
+
+inventory_schema: |
+  {
+    "variant_id": number,
+    "product_id": number,
+    "adjustment": number,  // Positive or negative integer
+    "sku": "string",
+    "reason": "string",  // "recount", "received", "damaged", or "sold"
+    "timestamp": "2024-02-05T14:30:00Z"  // ISO format timestamp
+  } 
