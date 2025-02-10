@@ -127,10 +127,13 @@ class ShopifyGraphQLClient:
             "tags": order_data.get("tags", []),
             "lineItems": order_data.get("lineItems", []),
             "note": "Created via Synthetic Data Generator",
-            "customAttributes": [{"key": "source", "value": "synthetic_data"}],
+            "customAttributes": order_data.get("customAttributes", [{"key": "source", "value": "synthetic_data"}]),
             "useCustomerDefaultAddress": False,
             "appliedDiscount": None  # No discount by default
         }
+        
+        if order_data.get("shippingAddress"):
+            draft_input["shippingAddress"] = order_data["shippingAddress"]
         
         result = self.execute_query(create_mutation, variables={"input": draft_input})
         

@@ -115,6 +115,12 @@ class AIDataGenerator:
         # Validate and ensure each order has valid line items
         valid_orders = []
         for order in orders:
+            # Ensure AI_GENERATED tag is present
+            if 'tags' not in order:
+                order['tags'] = ["AI_GENERATED"]
+            elif "AI_GENERATED" not in order['tags']:
+                order['tags'].append("AI_GENERATED")
+
             if not order.get('lineItems'):
                 # Create a line item using a random valid product variant
                 product = random.choice(products_preview)
@@ -145,12 +151,16 @@ class AIDataGenerator:
                     "taxable": True
                 }]
             
-            # Update generated_at to current time range
+            # Distribute order dates evenly across the date range
+            days_ago = random.uniform(0, date_range_days)
+            hours_ago = random.uniform(0, 24)
+            minutes_ago = random.uniform(0, 60)
+            order_time = current_date - timedelta(days=days_ago, hours=hours_ago, minutes=minutes_ago)
+            
+            # Update generated_at to distributed time
             order["customAttributes"] = [
                 {"key": "source", "value": "synthetic_data"},
-                {"key": "generated_at", "value": (
-                    current_date - timedelta(days=random.randint(0, date_range_days))
-                ).isoformat() + "Z"}
+                {"key": "generated_at", "value": order_time.isoformat() + "Z"}
             ]
             
             if order['lineItems']:  # Only add orders with valid line items
@@ -162,11 +172,16 @@ class AIDataGenerator:
             # Modify the line items slightly for variety
             for item in new_order['lineItems']:
                 item['quantity'] = random.randint(1, 3)
+            
+            # Distribute new order dates evenly as well
+            days_ago = random.uniform(0, date_range_days)
+            hours_ago = random.uniform(0, 24)
+            minutes_ago = random.uniform(0, 60)
+            order_time = current_date - timedelta(days=days_ago, hours=hours_ago, minutes=minutes_ago)
+            
             new_order["customAttributes"] = [
                 {"key": "source", "value": "synthetic_data"},
-                {"key": "generated_at", "value": (
-                    current_date - timedelta(days=random.randint(0, date_range_days))
-                ).isoformat() + "Z"}
+                {"key": "generated_at", "value": order_time.isoformat() + "Z"}
             ]
             valid_orders.append(new_order)
         
